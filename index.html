@@ -16,7 +16,7 @@ button{font:20px system-ui;padding:12px 24px}
 <button id="go">Avvia fotocamera</button>
 <div id="esito">—</div>
 <p id="n">Scansionate: 0</p>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
 <script>
 const $=i=>document.getElementById(i), norm=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,"");
 let n=0,last="",lastT=0;
@@ -26,19 +26,28 @@ function beep(){try{const c=new AudioContext(),o=c.createOscillator();o.connect(
   navigator.vibrate&&navigator.vibrate(300)}
 $("go").onclick=async()=>{
   $("go").hidden=true;
-  const F=ZXing.BarcodeFormat,hints=new Map([[ZXing.DecodeHintType.TRY_HARDER,true],[ZXing.DecodeHintType.POSSIBLE_FORMATS,[F.CODE_128,F.CODE_39,F.QR_CODE]]]);
-  const r=new ZXing.BrowserMultiFormatReader(hints,50);
   try{
-    await r.decodeFromConstraints({video:{facingMode:"environment",width:{ideal:1920}}},"v",res=>{
-      if(!res)return;
-      const v=norm(res.getText()),now=Date.now();
-      if(v===last&&now-lastT<1500){lastT=now;return}   // stesso barcode ancora inquadrato
-      last=v;lastT=now;n++;$("n").textContent="Scansionate: "+n;
-      const ok=v.includes(norm($("target").value));
-      document.body.className=ok?"ok":"no";
-      $("esito").textContent=ok?"✔ TROVATA!":"✘ no ("+v+")";
-      if(ok)beep();
-    });
-  }catch(e){$("esito").textContent="Fotocamera non disponibile: "+e.message;$("go").hidden=false}
+    const v=$("v");
+    v.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920}}});
+    await v.play();
+    const cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
+    const tick=async()=>{
+      if(v.videoWidth){
+        cv.width=v.videoWidth;cv.height=v.videoHeight;cx.drawImage(v,0,0);
+        const syms=await zbarWasm.scanImageData(cx.getImageData(0,0,cv.width,cv.height));
+        for(const s of syms){
+          const t=norm(s.decode()),now=Date.now();
+          if(t===last&&now-lastT<1500){lastT=now;continue}   // stesso barcode ancora inquadrato
+          last=t;lastT=now;n++;$("n").textContent="Scansionate: "+n;
+          const ok=t.includes(norm($("target").value));
+          document.body.className=ok?"ok":"no";
+          $("esito").textContent=ok?"✔ TROVATA!":"✘ no ("+t+")";
+          if(ok)beep();
+        }
+      }
+      setTimeout(tick,80);
+    };
+    tick();
+  }catch(e){$("esito").textContent="Errore: "+e.message;$("go").hidden=false}
 };
 </script></body></html>
