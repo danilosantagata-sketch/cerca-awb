@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cerca AWB</title>
+<style>
+body{margin:0;font:18px system-ui;text-align:center;background:#222;color:#fff;transition:background .15s}
+body.ok{background:#1a9c3c}body.no{background:#b3261e}
+input{font:22px monospace;width:90%;max-width:500px;padding:10px;margin:8px;text-align:center}
+video{width:100%;max-width:500px;background:#000}
+#esito{font-size:44px;font-weight:700;margin:12px;min-height:60px}
+button{font:20px system-ui;padding:12px 24px}
+</style></head><body>
+<p>AWB da trovare</p>
+<input id="target" value="JDV031153966297" autocapitalize="characters">
+<div><video id="v" playsinline muted></video></div>
+<button id="go">Avvia fotocamera</button>
+<div id="esito">—</div>
+<p id="n">Scansionate: 0</p>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+const $=i=>document.getElementById(i), norm=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,"");
+let n=0,last="",lastT=0;
+try{$("target").value=localStorage.awb||$("target").value}catch(_){}
+$("target").onchange=()=>{try{localStorage.awb=$("target").value}catch(_){}};
+function beep(){try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.start();o.stop(c.currentTime+.4)}catch(_){}
+  navigator.vibrate&&navigator.vibrate(300)}
+$("go").onclick=async()=>{
+  $("go").hidden=true;
+  const hints=new Map([[ZXing.DecodeHintType.TRY_HARDER,true]]);
+  const r=new ZXing.BrowserMultiFormatReader(hints,200);
+  try{
+    await r.decodeFromConstraints({video:{facingMode:"environment",width:{ideal:1280}}},"v",res=>{
+      if(!res)return;
+      const v=norm(res.getText()),now=Date.now();
+      if(v===last&&now-lastT<1500){lastT=now;return}   // stesso barcode ancora inquadrato
+      last=v;lastT=now;n++;$("n").textContent="Scansionate: "+n;
+      const ok=v.includes(norm($("target").value));
+      document.body.className=ok?"ok":"no";
+      $("esito").textContent=ok?"✔ TROVATA!":"✘ no ("+v+")";
+      if(ok)beep();
+    });
+  }catch(e){$("esito").textContent="Fotocamera non disponibile: "+e.message;$("go").hidden=false}
+};
+</script></body></html>
